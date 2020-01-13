@@ -85,32 +85,6 @@ def kin_energy(velocities, m=1):
     return mean_kin
 
 
-def pravash_product(f_matrix, distances):
-    """
-    Multiplies the force matrix with the distances and returns the force vector for every particle
-    :param f_matrix: NxN <array> with the force contribution from every particle to each other
-    :param distances: NxNx3 <array> with all the distances from every particle to each other
-    :return: Nx3 <array> with all the forces
-    """
-    num_particles = f_matrix.shape[0]
-    f = np.zeros((num_particles, 3))
-    for i in range(num_particles):
-        for j in range(num_particles):
-            f[i] += f_matrix[i][j] * distances[i][j]
-
-    return f
-
-
-def diego_product(f_matrix, distances):
-    """
-    Same as pravash_prodcut but without loops
-    :param f_matrix:
-    :param distances:
-    :return:
-    """
-    pass
-
-
 def force(positions, box_size, rc=3.5):
     # e_cut = lennard_jones_potential(rc)
     xr = distance(positions)
@@ -123,7 +97,7 @@ def force(positions, box_size, rc=3.5):
     r2i[mask_inf] = 0
     r6i = r2i ** 3
     ff = 48 * r2i * r6i * (r6i - 0.5)
-    f = pravash_product(ff, xr)
+    f = np.inner(ff, xr.transpose((0, 2, 1))).diagonal().transpose()
     return f
 
 
