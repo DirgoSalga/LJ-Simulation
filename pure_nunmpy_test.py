@@ -1,8 +1,9 @@
 import numpy as np
-
+from numba import jit
 
 class NotCubicNumber(Exception):
     pass
+
 
 
 def init_pos(box_size, num_particles, scale=1.):
@@ -49,7 +50,7 @@ def init_vel(num_of_particles, positions, temp, dt, m=1):
     prev_positions = positions - velocities * dt
     return velocities, prev_positions, total_kin
 
-
+@jit
 def distance(positions):
     """
     Calculate the distances between all particles.
@@ -59,7 +60,7 @@ def distance(positions):
     p2 = positions[:, np.newaxis, :]
     return positions - p2
 
-
+@jit
 def lennard_jones_potential(r, sigma=1, epsilon=1):
     """
     Return the value of the potential between to given particles
@@ -72,7 +73,7 @@ def lennard_jones_potential(r, sigma=1, epsilon=1):
     s6 = sigma ** 6
     return 4 * epsilon * r6i * s6 * (r6i * s6 - 1)
 
-
+@jit
 def kin_energy(velocities, m=1):
     """
     Calculates the mean kinetic energy of the system
@@ -86,8 +87,10 @@ def kin_energy(velocities, m=1):
 
 
 def force(positions, box_size, rc=3.5):
-    # e_cut = lennard_jones_potential(rc)
+    e_cut = lennard_jones_potential(3.5)
+    
     xr = distance(positions)
+    
     xr = xr - box_size * np.round(xr / box_size)
     r2 = np.sum(xr * xr, axis=2)
     mask = r2 > rc ** 2
@@ -98,12 +101,25 @@ def force(positions, box_size, rc=3.5):
     r6i = r2i ** 3
     ff = 48 * r2i * r6i * (r6i - 0.5)
     f = np.inner(ff, xr.transpose((0, 2, 1))).diagonal().transpose()
-    return f
+    
+    energy = np.sum(4 * r6i * (r6i - 1) - e_cut)/len(positions)#energy calculation
+    
+    
+    
+    return f,energy
 
-
+def Momentum(velocities,Mass):
+    momentum =(np.sum(Mass * velocities))
+    return momentum
+    
 def main():
     pass
 
 
 if __name__ == '__main__':
     pass
+positions = np.random.random(size=(5, 3))
+velocities = np.random.random(size=(5,3))
+#%%
+f,energy=force(positions,30,3.5)
+Momentum = Momentum(velocities,1)
