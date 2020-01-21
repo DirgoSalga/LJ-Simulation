@@ -26,6 +26,7 @@ def init_pos(box_size, num_particles, scale=1.):
         for j in one_direction:
             for k in one_direction:
                 positions.append(np.array([i, j, k]))
+    
     return np.array(positions)
 
 
@@ -76,7 +77,7 @@ def lennard_jones_potential(r, sigma=1, epsilon=1):
 def kin_energy(velocities, m=1):
     """
     Calculates the mean kinetic energy of the system
-    :param velocities: <arraya> of 3D particle velocities
+    :param velocities: <array> of 3D particle velocities
     :param m: <float> or N-D <array> with mass of the particles
     :return: <float> mean kinetic energy
     """
@@ -88,8 +89,9 @@ def kin_energy(velocities, m=1):
 def force(positions, box_size, rc=3.5):
     e_cut = lennard_jones_potential(3.5)
     xr = distance(positions)
+    
     xr = xr - box_size * np.round(xr / box_size)
-    r2 = np.sum(xr * xr, axis=2)
+    r2 = np.sum(xr * xr,axis=2)
     mask = r2 > rc ** 2
     r2[mask] = 0
     r2i = 1 / r2
@@ -97,15 +99,17 @@ def force(positions, box_size, rc=3.5):
     r2i[mask_inf] = 0
     r6i = r2i ** 3
     ff = 48 * r2i * r6i * (r6i - 0.5)
-    f = np.inner(ff, xr.transpose((0, 2, 1))).diagonal().transpose()
+    f = np.matmul(ff, np.transpose(xr,(1,0,2))).diagonal()
+    f = np.transpose(f)
+    
     energy = 4 * r6i * (r6i - 1) - e_cut
     energy[mask_inf] = 0
-    energy = energy.sum() / len(positions)
+    energy = energy.sum() / 2 / len(positions)
     return f, energy
 
 
 def momentum(velocities, mass=1):
-    p = np.sum(mass * velocities, axis=1)
+    p = np.sum(mass * velocities, axis=0)
     return p
 
 
@@ -130,7 +134,6 @@ def update_position(r, v, f_prev, dt, bs, method="velocity_verlet", m=1):
     elif method == "leap_frog":
         pass
 
-
 def xyz_line(coordinates):
     """
     Function produces a string with an index to be filled and the three spatial coordinates, like XYZ format.
@@ -142,28 +145,42 @@ def xyz_line(coordinates):
 def main():
     """
     This is the main routine. Change parameters within this function to change the parameters of the simulation.
-    :return: None
+    :return: Momentary mean kinetic energy, potential energy and momentum for every step.
     """
     particles_num = 125
     box_size = 30
-    temp = 3
-    time_step = 0.0001
+    temp = 0.3
+    time_step = 0.001
     integration_steps = 10000
+    p_list=np.zeros(integration_steps)
+    e_kin_list=np.zeros(integration_steps)
+    e_pot_list=np.zeros(integration_steps)
     r = init_pos(box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size)
     v, r_prev, e_kin = init_vel(r, temp, time_step)
     f, e_pot = force(r, box_size)
+    
     i = 0
     while i < integration_steps:
-        r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
         e_kin = kin_energy(v)
-        p = momentum(v)
+        r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
+        
+        p = np.linalg.norm(momentum(v))
+        p_list[i]=p
+        e_kin_list[i]=e_kin
+        e_pot_list[i]=e_pot
         i += 1
-
+    return e_kin_list,e_pot_list,p_list
 
 if __name__ == '__main__':
     import time
-
+    import matplotlib.pyplot as plt
     start_time = time.time()
-    main()
+    kin, pot, p = main()
     end_time = time.time()
     print(end_time - start_time)
+#%% 
+    x = np.arange(0,10000, 1)
+    plt.plot(x, kin,label='kin')
+    plt.plot(x, pot,label='pot')
+    plt.plot(x, p,label='mom')
+    plt.legend()
