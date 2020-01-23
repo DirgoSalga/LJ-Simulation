@@ -151,6 +151,7 @@ def plot_check(kin, pot, p):
     plt.plot(x, p, label="Momentum")
     plt.xlabel("Simulation step")
     plt.ylabel("Energy/Momentum (A.U.)")
+    plt.legend(loc=0, fancybox=True)
     fig.savefig("check_plot.pdf")
 
 
@@ -187,6 +188,7 @@ def main():
     temp = 0.3
     time_step = 0.001
     integration_steps = 10000
+    collision_frequency = 10
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
@@ -199,6 +201,9 @@ def main():
     while i < integration_steps:
         e_kin = kin_energy(v)
         r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
+        sigma = np.sqrt(temp)
+        collision_mask = np.random.random_sample(particles_num) < collision_frequency * time_step
+        v[collision_mask] = np.random.normal(0, sigma, (len(v[collision_mask]), 3))
         np.savetxt("positions/positions_{0}.xyz".format(i), r, fmt="{atom} %.3f %.3f %.3f")
         np.savetxt("velocities/velocities_{0}.xyz".format(i), v, fmt="{atom} %.3f %.3f %.3f")
         p = np.linalg.norm(momentum(v))
