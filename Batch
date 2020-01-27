@@ -1,0 +1,33 @@
+#!/bin/bash
+#-----------------------------------------------------------------
+# Example SLURM job script to run serial applications on Mogon.
+#
+# This script requests one task using all cores (48) on one node. 
+# The job will have access to all the memory and all 6 GPUs in the node.  
+#-----------------------------------------------------------------
+ 
+#SBATCH -J mysimplegpujob        # Job name
+#SBATCH -o mysimplegpujob.%j.out # Specify stdout output file (%j expands to jobId)
+#SBATCH -p parallel                # Partition name
+#SBATCH -N 1                     # Total number of nodes requested (48 cores/node per GPU node)
+#SBATCH -n 40                     # Total number of tasks 
+#SBATCH -c 60                    # CPUs per task 
+#SBATCH -t 05:00:00              # Run time (hh:mm:ss) - 5.0 hours
+
+ 
+#SBATCH -A m2_komet331hpc            # Specify allocation to charge against
+#SBATCH --mail-type=ALL			# receive all notifications
+#SBATCH --mail-user=pbista@students.uni-mainz.de
+ 
+# Load all necessary modules if needed (these are examples)
+# Loading modules in the script ensures a consistent environment.
+module add lang/Python/3.7.4-GCCcore-8.3.0
+
+
+#activate virtualenv gameEnv
+virtualenv my_env
+source my_env/bin/activate
+pip install -r MyJob.txt
+ 
+# Launch the executable
+python3 pure_numpy_test.py
