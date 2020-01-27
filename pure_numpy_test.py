@@ -165,7 +165,8 @@ def unify_xyz(directory, header, num_of_files, cleanup=True):
     """
     import os
     written_files = os.listdir(directory)
-    written_files.pop(written_files.index(f"{directory}.xyz"))
+    if f"{directory}.xyz" in written_files:
+        written_files.pop(written_files.index(f"{directory}.xyz"))
     with open(f"{directory}/{directory}.xyz", "w") as f:
         for file in written_files:
             with open(f"{directory}/{file}", "r") as g:
@@ -217,6 +218,7 @@ def main():
 
 if __name__ == '__main__':
     import time
+
     # import matplotlib.pyplot as plt
 
     start_time = time.time()
