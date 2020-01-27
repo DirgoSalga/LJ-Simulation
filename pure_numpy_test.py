@@ -19,7 +19,7 @@ def init_pos(box_size, num_particles, scale=1.):
     if n ** 3 != num_particles:
         raise NotCubicNumber(
             "Number of particles N is not a perfect cube and cannot be used in this implementation.")
-    one_direction = np.linspace(box_size / 2 * -1, box_size / 2, n)
+    one_direction = np.linspace(box_size[0] / 2 * -1, box_size[0] / 2, n)
     one_direction *= scale
     positions = []
     for i in one_direction:
@@ -163,19 +163,16 @@ def unify_xyz(directory, header, num_of_files, cleanup=True):
     :param num_of_files: <int> number of files to be unified
     :return: None
     """
+    import os
+    written_files = os.listdir(directory)
+    written_files.pop(written_files.index(f"{directory}.xyz"))
     with open(f"{directory}/{directory}.xyz", "w") as f:
-        i = 0
-        while i < num_of_files:
-            with open(f"{directory}/{directory}_{i}.xyz", "r") as g:
+        for file in written_files:
+            with open(f"{directory}/{file}", "r") as g:
                 f.write(header)
                 f.write(g.read().format(atom="H"))
-            i += 1
-    if cleanup:
-        import os
-        all_files = os.listdir(directory)
-        all_files.pop(0)
-        for file in all_files:
-            os.remove(f"{directory}/{file}")
+            if cleanup:
+                os.remove(f"{directory}/{file}")
 
 
 def main():
@@ -184,15 +181,16 @@ def main():
     :return: Momentary mean kinetic energy, potential energy and momentum for every step.
     """
     particles_num = 125
-    box_size = 30
+    box_size = np.array([30, 30, 120])
     temp = 0.3
     time_step = 0.001
     integration_steps = 10000
     collision_frequency = 10
+    write_out_step = 1000
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
-    r = init_pos(box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size)
+    r = init_pos(box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size[0])  # Distance 1
     v, r_prev, e_kin = init_vel(r, temp, time_step)
     f, e_pot = force(r, box_size)
     i = 0
@@ -204,13 +202,14 @@ def main():
         sigma = np.sqrt(temp)
         collision_mask = np.random.random_sample(particles_num) < collision_frequency * time_step
         v[collision_mask] = np.random.normal(0, sigma, (len(v[collision_mask]), 3))
-        np.savetxt("positions/positions_{0}.xyz".format(i), r, fmt="{atom} %.3f %.3f %.3f")
-        np.savetxt("velocities/velocities_{0}.xyz".format(i), v, fmt="{atom} %.3f %.3f %.3f")
         p = np.linalg.norm(momentum(v))
         p_list[i] = p
         e_kin_list[i] = e_kin
         e_pot_list[i] = e_pot
         i += 1
+        if i % write_out_step == 0:
+            np.savetxt("positions/positions_{0}.xyz".format(i), r, fmt="{atom} %.3f %.3f %.3f")
+            np.savetxt("velocities/velocities_{0}.xyz".format(i), v, fmt="{atom} %.3f %.3f %.3f")
     unify_xyz("positions", f"{particles_num}\n\n", integration_steps)
     unify_xyz("velocities", f"{particles_num}\n\n", integration_steps)
     return e_kin_list, e_pot_list, p_list
