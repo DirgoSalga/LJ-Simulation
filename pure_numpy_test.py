@@ -142,17 +142,17 @@ def update_position(r, v, f_prev, dt, bs, m=1):
     return r, v, f, e_pot
 
 
-def plot_check(kin, pot, p):
-    fig = plt.figure()
-    x = np.arange(0, len(kin), 1)
-    plt.plot(x, kin, label="Kinetic energy")
-    plt.plot(x, pot, label="Potential energy")
-    plt.plot(x, kin + pot, label="Total energy")
-    plt.plot(x, p, label="Momentum")
-    plt.xlabel("Simulation step")
-    plt.ylabel("Energy/Momentum (A.U.)")
-    plt.legend(loc=0, fancybox=True)
-    fig.savefig("check_plot.pdf")
+# def plot_check(kin, pot, p):
+#     fig = plt.figure()
+#     x = np.arange(0, len(kin), 1)
+#     plt.plot(x, kin, label="Kinetic energy")
+#     plt.plot(x, pot, label="Potential energy")
+#     plt.plot(x, kin + pot, label="Total energy")
+#     plt.plot(x, p, label="Momentum")
+#     plt.xlabel("Simulation step")
+#     plt.ylabel("Energy/Momentum (A.U.)")
+#     plt.legend(loc=0, fancybox=True)
+#     fig.savefig("check_plot.pdf")
 
 
 def unify_xyz(directory, header, num_of_files, cleanup=True):
@@ -217,10 +217,13 @@ def main():
 
 if __name__ == '__main__':
     import time
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
     start_time = time.time()
     e_kin, e_pot, p_total = main()
     end_time = time.time()
     print(end_time - start_time)
-    plot_check(e_kin, e_pot, p_total)
+    np.savetxt("E_kin.txt", e_kin)
+    np.savetxt("E_pot.txt", e_pot)
+    np.savetxt("Momentum.txt", p_total)
+    # plot_check(e_kin, e_pot, p_total)
