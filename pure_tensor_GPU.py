@@ -1,18 +1,12 @@
 import numpy as np
 import torch
 
-if torch.cuda.is_available():
-    device = torch.device("cuda:0")  # you can continue going on here, like cuda:1 cuda:2....etc. 
-    print("Running on the GPU")
-else:
-    device = torch.device("cpu")
-    #print("Running on the CPU")
 
 class NotCubicNumber(Exception):
     pass
 
 
-def init_pos(box_size, num_particles, scale=1.):
+def init_pos(box_size, num_particles, scale=1.0):
     """
     Initialisation of the position of N particles in a box with a given side length in 3 dimensions. The particles are
     positioned on a 3D-lattice with equidistant points.
@@ -26,7 +20,8 @@ def init_pos(box_size, num_particles, scale=1.):
         n = round(num_particles ** (1 / 3))
         if n ** 3 != num_particles:
             raise NotCubicNumber(
-                "Number of particles N is not a perfect cube and cannot be used in this implementation.")
+                "Number of particles N is not a perfect cube and cannot be used in this implementation."
+            )
         one_direction = np.linspace(box_size[0] / 2 * -1, box_size[0] / 2, n)
         one_direction *= scale
         positions = []
@@ -34,8 +29,9 @@ def init_pos(box_size, num_particles, scale=1.):
             for j in one_direction:
                 for k in one_direction:
                     positions.append(np.array([i, j, k]))
-    
+
         return np.array(positions)
+
 
 def init_vel(positions, temp, dt, m=1):
     """
@@ -46,14 +42,14 @@ def init_vel(positions, temp, dt, m=1):
     :param m: <float> or <array> mass of the particles
     :return: <array> velocities, <array> previous positions and kinetic_energy <float>
     """
-    
+
     num_of_particles = len(positions)
     velocities = torch.randn(num_of_particles, 3).cuda()
     total_p = m * velocities.sum(axis=0)
-    total_kin = 0.5 * m * torch.tensordot(velocities,velocities)
+    total_kin = 0.5 * m * torch.tensordot(velocities, velocities)
     vel_center_of_mass = total_p / num_of_particles / m
     mean_kin = total_kin / num_of_particles
-    scale_factor = (3 / 2 * temp / mean_kin)**(1/2)
+    scale_factor = (3 / 2 * temp / mean_kin) ** (1 / 2)
     velocities = scale_factor * (velocities - vel_center_of_mass)
     prev_positions = positions - velocities * dt
     return velocities, prev_positions, total_kin
@@ -65,7 +61,7 @@ def distance(positions):
     :param positions: <array> with all 3D positions of the particles
     :return: <array> of shape (3, 1, num_of_particles)
     """
-    
+
     p2 = positions[:, np.newaxis, :]
     return positions - p2
 
@@ -78,7 +74,7 @@ def lennard_jones_potential(r, sigma=1, epsilon=1):
     :param epsilon: <float> constant
     :return: <float> with potential value at this distance
     """
-    
+
     r6i = 1 / r ** 6
     s6 = sigma ** 6
     return 4 * epsilon * r6i * s6 * (r6i * s6 - 1)
@@ -91,7 +87,7 @@ def kin_energy(velocities, m=1):
     :param m: <float> or N-D <array> with mass of the particles
     :return: <float> mean kinetic energy
     """
-    total_kin = 0.5 * m * torch.tensordot(velocities,velocities)
+    total_kin = 0.5 * m * torch.tensordot(velocities, velocities)
     mean_kin = total_kin / len(velocities)
     return mean_kin
 
@@ -104,7 +100,7 @@ def force(positions, box_size, rc=3.5):
     :param rc: <float> value of the distance where a cut-off should be applied
     :return: Nx3 force array, <float> value of the potential energy.
     """
-    
+
     e_cut = lennard_jones_potential(3.5)
     positions = positions.cuda()
     xr = distance(positions)
@@ -116,8 +112,8 @@ def force(positions, box_size, rc=3.5):
     mask_inf = torch.isinf(r2i)
     r2i[mask_inf] = 0
     r6i = r2i ** 3
-    ff = 48 * r2i * r6i * (r6i - 0.5)    
-    f = (torch.matmul(ff, xr.permute(1,0,2)).diagonal()).permute(1,0)
+    ff = 48 * r2i * r6i * (r6i - 0.5)
+    f = (torch.matmul(ff, xr.permute(1, 0, 2)).diagonal()).permute(1, 0)
     energy = 4 * r6i * (r6i - 1) - e_cut
     energy[mask_inf] = 0
     energy = energy.sum() / 2 / len(positions)
@@ -131,7 +127,7 @@ def momentum(velocities, mass=1):
     :param mass: <float or array> mass of the particles
     :return: <array> 3D momenta of all particles.
     """
-   
+
     velocities = velocities.cuda()
     p = torch.sum(mass * velocities, axis=0)
     return p
@@ -164,25 +160,26 @@ def plot_check(kin, pot, p):
     x = np.arange(0, len(kin), 1)
     plt.plot(x, kin, label="Kinetic energy")
     plt.plot(x, pot, label="Potential energy")
-    #plt.plot(x, kin + pot, label="Total energy")
-    #plt.plot(x, p, label="Momentum")
+    plt.plot(x, kin + pot, label="Total energy")
+    # plt.plot(x, p, label="Momentum")
     plt.xlabel("Simulation step")
     plt.ylabel("Energy/Momentum (A.U.)")
     plt.legend(loc=0, fancybox=True)
     fig.savefig("check_plot.pdf")
 
 
-def unify_xyz(directory, header, num_of_files, cleanup=True):
+def unify_xyz(directory, header, cleanup=True):
     """
-    Unifies all the xyz files
-    :param directory: <str> path to the directory containing the single xyz files
-    :param header: <str> header of the xyz files
-    :param num_of_files: <int> number of files to be unified
+    Writes multiple xyz files into a single file
+    :param directory: <str> path to the directory
+    :param header: <str> Header of the xyz file
+    :param cleanup: <boolean> set True if you would like to delete files after unification
     :return: None
     """
-    
     import os
+
     written_files = os.listdir(directory)
+    written_files.sort()
     if f"{directory}.xyz" in written_files:
         written_files.pop(written_files.index(f"{directory}.xyz"))
     with open(f"{directory}/{directory}.xyz", "w") as f:
@@ -194,6 +191,26 @@ def unify_xyz(directory, header, num_of_files, cleanup=True):
                 os.remove(f"{directory}/{file}")
 
 
+def unify_pt(directory, cleanup=True):
+    """
+    Unify binary torch files for later numpy unification
+    :param directory: <str> path to directory
+    :param cleanup: <boolean> set True if you would like to delete pt files after unification
+    :return: None
+    """
+    import os
+
+    written_files = os.listdir(directory)
+    if f"{directory}.xyz" in written_files:
+        written_files.pop(written_files.index(f"{directory}.xyz"))
+    for file in written_files:
+        load_str = f"{directory}/{file}"
+        x = torch.load(load_str)
+        base = file.split(".")[0]
+        np.savetxt(f"{directory}/{base}.xyz", x.cpu(), fmt="{atom} %.3f %.3f %.3f")
+        if cleanup:
+            os.remove(load_str)
+
 
 def main():
     """
@@ -201,49 +218,69 @@ def main():
     :return: Momentary mean kinetic energy, potential energy and momentum for every step.
     """
     particles_num = 1000
-    box_size = np.array([30,30,120])
+    box_size = np.array([30, 30, 120])
     temp = 0.3
     time_step = 0.001
     integration_steps = 1000000
-    collision_frequency = 1000
-    write_out_step = 1000
+    collision_frequency = 10
+    write_out_step = 100
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
-    r = init_pos(box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size[0])  # Distance 1
-    r = torch.tensor(r,dtype =torch.float).cuda()
+    r = init_pos(
+        box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size[0]
+    )
+    r = torch.tensor(r, dtype=torch.float).cuda()
     v, r_prev, e_kin = init_vel(r, temp, time_step)
-    box_size = torch.tensor(box_size,dtype =torch.float).cuda()
+    box_size = torch.tensor(box_size, dtype=torch.float).cuda()
     f, e_pot = force(r, box_size)
     i = 0
-   
-    np.savetxt("positions/positions_0.xyz", r.cpu(), fmt="{atom} %.3f %.3f %.3f")
-    np.savetxt("velocities/velocities_0.xyz", v.cpu(), fmt="{atom} %.3f %.3f %.3f")
+    np.savetxt("positions/postions_0000001.xyz", r.cpu(), fmt="{atom} %.3f %.3f %.3f")
+    # np.savetxt("positions/velocities_0.xyz", v.cpu(), fmt="{atom} %.3f %.3f %.3f")
+    # torch.save(r, "positions/positions_0.pt")
+    # torch.save(v, "velocities/velocities_0.pt")
     with torch.cuda.device(device):
         while i < integration_steps:
-            e_kin = kin_energy(v) 
+            e_kin = kin_energy(v)
             r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
-            if i<(integration_steps / 2):
-                    sigma = np.sqrt(temp)
-                    collision_mask = torch.randn(particles_num) < collision_frequency * time_step
-                    v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
-            p = torch.norm(momentum(v))     
+            if i < (integration_steps / 2):
+                sigma = np.sqrt(temp)
+                collision_mask = (
+                    np.random.random_sample(particles_num)
+                    < collision_frequency * time_step
+                )
+                v[collision_mask] = torch.normal(
+                    0, sigma, (len(v[collision_mask]), 3)
+                ).cuda()
+            p = torch.norm(momentum(v))
             p_list[i] = p
             e_kin_list[i] = e_kin
             e_pot_list[i] = e_pot
             i += 1
             if i % write_out_step == 0:
-                np.savetxt("positions/positions_{0}.xyz".format(i), r.cpu(), fmt="{atom} %.3f %.3f %.3f")
-                np.savetxt("velocities/velocities_{0}.xyz".format(i), v.cpu(), fmt="{atom} %.3f %.3f %.3f")
-        unify_xyz("positions", f"{particles_num}\n\n", integration_steps)
-        unify_xyz("velocities", f"{particles_num}\n\n", integration_steps)
-            
+                np.savetxt(
+                    "positions/positions_{0:07d}.xyz".format(i),r.cpu(),fmt="{atom} %.3f %.3f %.3f")
+                # np.savetxt("velocities/velocities_{0}.xyz".format(i),v.cpu(),fmt="{atom} %.3f %.3f %.3f")
+                # torch.save(r, "positions/positions_{0}.pt".format(i))
+                # torch.save(v, "velocities/positions_{0}.pt".format(i))
+        # unify_pt("positions")
+        # unify_pt("velocities")
+        unify_xyz("positions", f"{particles_num}\n\n")
+        # unify_xyz("velocities", f"{particles_num}\n\n")
+
     return e_kin_list, e_pot_list, p_list
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import time
     import matplotlib.pyplot as plt
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        print("Running on the GPU")
+    else:
+        device = torch.device("cpu")
+        print("Running on the CPU")
 
     start_time = time.time()
     e_kin, e_pot, p_total = main()
@@ -251,6 +288,6 @@ if __name__ == '__main__':
     np.savetxt("E_pot.txt", e_pot)
     np.savetxt("Momentum.txt", p_total)
     end_time = time.time()
-    
+
     print(end_time - start_time)
     plot_check(e_kin, e_pot, p_total)
