@@ -242,17 +242,12 @@ def main():
     with torch.cuda.device(device):
         while i < integration_steps:
             e_kin = kin_energy(v)
-            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
-            if i < (integration_steps / 2):
+            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)           
+            if i<(integration_steps / 2):
                 sigma = np.sqrt(temp)
-                collision_mask = (
-                    np.random.random_sample(particles_num)
-                    < collision_frequency * time_step
-                )
-                v[collision_mask] = torch.normal(
-                    0, sigma, (len(v[collision_mask]), 3)
-                ).cuda()
-            p = torch.norm(momentum(v))
+                collision_mask = np.random.random_sample(particles_num) < collision_frequency * time_step
+                v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
+            p = torch.norm(momentum(v))     
             p_list[i] = p
             e_kin_list[i] = e_kin
             e_pot_list[i] = e_pot

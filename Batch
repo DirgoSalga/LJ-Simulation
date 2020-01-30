@@ -8,10 +8,10 @@
  
 #SBATCH -J mysimplegpujob        # Job name
 #SBATCH -o mysimplegpujob.%j.out # Specify stdout output file (%j expands to jobId)
-#SBATCH -p parallel                # Partition name
+#SBATCH -p m2_gpu                # Partition name
 #SBATCH -N 1                     # Total number of nodes requested (48 cores/node per GPU node)
-#SBATCH -n 40                     # Total number of tasks 
-#SBATCH -c 60                    # CPUs per task 
+#SBATCH -n 1                     # Total number of tasks 
+#SBATCH -c 48                    # CPUs per task 
 #SBATCH -t 05:00:00              # Run time (hh:mm:ss) - 5.0 hours
 
  
@@ -21,8 +21,8 @@
  
 # Load all necessary modules if needed (these are examples)
 # Loading modules in the script ensures a consistent environment.
-module add lang/Python/3.7.4-GCCcore-8.3.0
-
+module add lang/Python/3.6.1-intel-2017.02
+module load system/CUDA/9.1.85
 
 #activate virtualenv gameEnv
 virtualenv my_env
