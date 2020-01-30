@@ -164,7 +164,7 @@ def plot_check(kin, pot, p):
     x = np.arange(0, len(kin), 1)
     plt.plot(x, kin, label="Kinetic energy")
     plt.plot(x, pot, label="Potential energy")
-    #plt.plot(x, kin + pot, label="Total energy")
+    plt.plot(x, kin + pot, label="Total energy")
     #plt.plot(x, p, label="Momentum")
     plt.xlabel("Simulation step")
     plt.ylabel("Energy/Momentum (A.U.)")
@@ -200,13 +200,13 @@ def main():
     This is the main routine. Change parameters within this function to change the parameters of the simulation.
     :return: Momentary mean kinetic energy, potential energy and momentum for every step.
     """
-    particles_num = 1000
+    particles_num = 13**3
     box_size = np.array([30,30,120])
     temp = 0.3
     time_step = 0.001
-    integration_steps = 1000000
-    collision_frequency = 1000
-    write_out_step = 1000
+    integration_steps = 10000
+    collision_frequency = 10
+    write_out_step = 100
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
@@ -223,10 +223,14 @@ def main():
         while i < integration_steps:
             e_kin = kin_energy(v) 
             r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
+            #print(v.shape)
+            
             if i<(integration_steps / 2):
-                    sigma = np.sqrt(temp)
-                    collision_mask = torch.randn(particles_num) < collision_frequency * time_step
-                    v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
+                sigma = np.sqrt(temp)
+                collision_mask = np.random.random_sample(particles_num) < collision_frequency * time_step
+                v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
+            
+                
             p = torch.norm(momentum(v))     
             p_list[i] = p
             e_kin_list[i] = e_kin
