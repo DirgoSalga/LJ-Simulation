@@ -50,7 +50,7 @@ def init_vel(positions, temp, dt, m=1):
     num_of_particles = len(positions)
     velocities = torch.randn(num_of_particles, 3).cuda()
     total_p = m * velocities.sum(axis=0)
-    total_kin = 0.5 * m * torch.sum(velocities * velocities)
+    total_kin = 0.5 * m * torch.tensordot(velocities,velocities)
     vel_center_of_mass = total_p / num_of_particles / m
     mean_kin = total_kin / num_of_particles
     scale_factor = (3 / 2 * temp / mean_kin)**(1/2)
@@ -91,10 +91,9 @@ def kin_energy(velocities, m=1):
     :param m: <float> or N-D <array> with mass of the particles
     :return: <float> mean kinetic energy
     """
-    with torch.cuda.device(device):
-        total_kin = 0.5 * m * (velocities * velocities).sum()
-        mean_kin = total_kin / len(velocities)
-        return mean_kin
+    total_kin = 0.5 * m * torch.tensordot(velocities,velocities)
+    mean_kin = total_kin / len(velocities)
+    return mean_kin
 
 
 def force(positions, box_size, rc=3.5):
@@ -149,15 +148,15 @@ def update_position(r, v, f_prev, dt, bs, m=1):
     :param m: <float or array> particle masses
     :return: Current positions <array>, velocities <array> and forces <array>.
     """
-    #with torch.cuda.device(device):
-    a_prev = f_prev / m
-    r += v * dt + 0.5 * a_prev * dt * dt
-    f, e_pot = force(r, bs)
-    f = f.cuda()
-    e_pot = e_pot.cuda()
-    a = f / m
-    v += 0.5 * (a_prev + a) * dt
-    return r, v, f, e_pot
+    with torch.cuda.device(device):
+        a_prev = f_prev / m
+        r += v * dt + 0.5 * a_prev * dt * dt
+        f, e_pot = force(r, bs)
+        f = f.cuda()
+        e_pot = e_pot.cuda()
+        a = f / m
+        v += 0.5 * (a_prev + a) * dt
+        return r, v, f, e_pot
 
 
 def plot_check(kin, pot, p):
@@ -204,10 +203,10 @@ def main():
     particles_num = 1000
     box_size = np.array([30,30,120])
     temp = 0.3
-    time_step = 0.005
-    integration_steps = 1000
+    time_step = 0.001
+    integration_steps = 1000000
     collision_frequency = 1000
-    write_out_step = 100
+    write_out_step = 1000
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
@@ -223,24 +222,22 @@ def main():
     with torch.cuda.device(device):
         while i < integration_steps:
             e_kin = kin_energy(v) 
-            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)            
+            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
             if i<(integration_steps / 2):
-                    sigma = temp**(1/2)
-                    collision_mask = (torch.randn(particles_num) < collision_frequency * time_step)
+                    sigma = np.sqrt(temp)
+                    collision_mask = torch.randn(particles_num) < collision_frequency * time_step
                     v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
-            
-            
-            p = torch.norm(momentum(v))
-          
+            p = torch.norm(momentum(v))     
             p_list[i] = p
             e_kin_list[i] = e_kin
             e_pot_list[i] = e_pot
             i += 1
-        if i % write_out_step == 0:
-            np.savetxt("positions/positions_{0}.xyz".format(i), r.cpu(), fmt="{atom} %.3f %.3f %.3f")
-            np.savetxt("velocities/velocities_{0}.xyz".format(i), v.cpu(), fmt="{atom} %.3f %.3f %.3f")
-    unify_xyz("positions", f"{particles_num}\n\n", integration_steps)
-    unify_xyz("velocities", f"{particles_num}\n\n", integration_steps)
+            if i % write_out_step == 0:
+                np.savetxt("positions/positions_{0}.xyz".format(i), r.cpu(), fmt="{atom} %.3f %.3f %.3f")
+                np.savetxt("velocities/velocities_{0}.xyz".format(i), v.cpu(), fmt="{atom} %.3f %.3f %.3f")
+        unify_xyz("positions", f"{particles_num}\n\n", integration_steps)
+        unify_xyz("velocities", f"{particles_num}\n\n", integration_steps)
+            
     return e_kin_list, e_pot_list, p_list
 
 
@@ -256,4 +253,4 @@ if __name__ == '__main__':
     end_time = time.time()
     
     print(end_time - start_time)
-    #plot_check(e_kin, e_pot, p_total)
+    plot_check(e_kin, e_pot, p_total)
