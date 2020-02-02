@@ -1,0 +1,10 @@
+#!/bin/bash
+for t in 0.3 0.8 0.9 ; do
+    mkdir -p $t
+    cp pure_tensor_GPU.py $t
+    cd $t
+    mkdir 
+    python3 pure_tensor_GPU.py $t > time_needed.txt &
+    cd ../
+done
+wait

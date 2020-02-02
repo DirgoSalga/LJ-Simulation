@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 
 class NotCubicNumber(Exception):
@@ -168,7 +169,7 @@ def plot_check(kin, pot, p):
     fig.savefig("check_plot.pdf")
 
 
-def unify_xyz(directory, header, cleanup=True):
+def unify_xyz(directory, header, integration_steps, write_out_step, cleanup=True):
     """
     Writes multiple xyz files into a single file
     :param directory: <str> path to the directory
@@ -180,15 +181,13 @@ def unify_xyz(directory, header, cleanup=True):
 
     written_files = os.listdir(directory)
     written_files.sort()
-    if f"{directory}.xyz" in written_files:
-        written_files.pop(written_files.index(f"{directory}.xyz"))
     with open(f"{directory}/{directory}.xyz", "w") as f:
-        for file in written_files:
-            with open(f"{directory}/{file}", "r") as g:
+        for i in range(0, integration_steps + 1, write_out_step):
+            with open(f"{directory}/{directory}_{i}.xyz", "r") as g:
                 f.write(header)
                 f.write(g.read().format(atom="H"))
             if cleanup:
-                os.remove(f"{directory}/{file}")
+                os.remove(f"{directory}/{directory}_{i}.xyz")
 
 
 def unify_pt(directory, cleanup=True):
@@ -212,55 +211,58 @@ def unify_pt(directory, cleanup=True):
             os.remove(load_str)
 
 
-def main():
+def main(particles_num, temp, time_step, integration_steps):
     """
-    This is the main routine. Change parameters within this function to change the parameters of the simulation.
-    :return: Momentary mean kinetic energy, potential energy and momentum for every step.
+    Main routine of the LJ simulation
+    :param particles_num: <int> number of particles in the simulation
+    :param temp: <float> starting temperature of the simulation
+    :param time_step: <float> size of the time step
+    :param integration_steps: <int> number of simulation steps
+    :return: <array> Momentary mean kinetic energy, <array> potential energy and <array> momentum for every step.
     """
-    particles_num = 1000
-    box_size = np.array([30, 30, 120])
-    temp = 0.3
-    time_step = 0.001
-    integration_steps = 1000000
+    box_size = np.array([10, 10, 20])
     collision_frequency = 10
-    write_out_step = 100
+    write_out_step = 1000
     p_list = np.zeros(integration_steps)
     e_kin_list = np.zeros(integration_steps)
     e_pot_list = np.zeros(integration_steps)
-    r = init_pos(
-        box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size[0]
-    )
+    r = init_pos(box_size, particles_num, scale=(np.cbrt(particles_num) - 1) / box_size[0])
     r = torch.tensor(r, dtype=torch.float).cuda()
     v, r_prev, e_kin = init_vel(r, temp, time_step)
     box_size = torch.tensor(box_size, dtype=torch.float).cuda()
     f, e_pot = force(r, box_size)
     i = 0
-    np.savetxt("positions/postions_0000001.xyz", r.cpu(), fmt="{atom} %.3f %.3f %.3f")
+    np.savetxt("positions/positions_0.xyz", r.cpu(), fmt="{atom} %.3f %.3f %.3f")
     # np.savetxt("positions/velocities_0.xyz", v.cpu(), fmt="{atom} %.3f %.3f %.3f")
     # torch.save(r, "positions/positions_0.pt")
     # torch.save(v, "velocities/velocities_0.pt")
     with torch.cuda.device(device):
         while i < integration_steps:
             e_kin = kin_energy(v)
-            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)           
-            if i<(integration_steps / 2):
+            r, v, f, e_pot = update_position(r, v, f, time_step, box_size)
+            if i < (integration_steps / 2):
                 sigma = np.sqrt(temp)
-                collision_mask = np.random.random_sample(particles_num) < collision_frequency * time_step
-                v[collision_mask] = torch.normal(0, sigma, (len(v[collision_mask]), 3)).cuda()
-            p = torch.norm(momentum(v))     
+                collision_mask = (
+                        np.random.random_sample(particles_num)
+                        < collision_frequency * time_step
+                )
+                v[collision_mask] = torch.normal(
+                    0, sigma, (len(v[collision_mask]), 3)
+                ).cuda()
+            p = torch.norm(momentum(v))
             p_list[i] = p
             e_kin_list[i] = e_kin
             e_pot_list[i] = e_pot
             i += 1
             if i % write_out_step == 0:
                 np.savetxt(
-                    "positions/positions_{0:07d}.xyz".format(i),r.cpu(),fmt="{atom} %.3f %.3f %.3f")
+                    "positions/positions_{0}.xyz".format(i), r.cpu(), fmt="{atom} %.3f %.3f %.3f")
                 # np.savetxt("velocities/velocities_{0}.xyz".format(i),v.cpu(),fmt="{atom} %.3f %.3f %.3f")
                 # torch.save(r, "positions/positions_{0}.pt".format(i))
                 # torch.save(v, "velocities/positions_{0}.pt".format(i))
         # unify_pt("positions")
         # unify_pt("velocities")
-        unify_xyz("positions", f"{particles_num}\n\n")
+        unify_xyz("positions", f"{particles_num}\n\n", integration_steps, write_out_step)
         # unify_xyz("velocities", f"{particles_num}\n\n")
 
     return e_kin_list, e_pot_list, p_list
@@ -268,21 +270,32 @@ def main():
 
 if __name__ == "__main__":
     import time
-    import matplotlib.pyplot as plt
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Runs an LJ-simulation in a box.")
+    parser.add_argument('temp', metavar='Temperature', type=float, help='Initial temperature of the simulation.')
+    parser.add_argument('-p', '--particles_num', metavar="Number of particles", type=int, default=1000,
+                        help='Number of particles in the simulation. Defaul 1000')
+    parser.add_argument('-t', '--time_step', metavar="Time step", type=float, default=0.005,
+                        help='Size of the simulation time step.')
+    parser.add_argument('-s', '--integration_steps', metavar='Integration steps', type=int, default=1000000,
+                        help='Number of steps in the simulation.')
+    parser.add_argument('-d', '--device', metavar='Device ID', default=0, type=int,
+                        help="CUDA device number. Default 0.")
+    args = parser.parse_args()  # gets the arguments from terminal now!!!
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device(f"cuda:{args.device}")
         print("Running on the GPU")
     else:
         device = torch.device("cpu")
         print("Running on the CPU")
-
+    print(args)
     start_time = time.time()
-    e_kin, e_pot, p_total = main()
+    e_kin, e_pot, p_total = main(args.particles_num, args.temp, args.time_step, args.integration_steps)
+    end_time = time.time()
     np.savetxt("E_kin.txt", e_kin)
     np.savetxt("E_pot.txt", e_pot)
     np.savetxt("Momentum.txt", p_total)
-    end_time = time.time()
 
     print(end_time - start_time)
     plot_check(e_kin, e_pot, p_total)
